@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from datasets import Dataset
+
 
 REQUIRED_KEYS = {"prompt", "chosen", "rejected"}
 
@@ -67,3 +69,15 @@ def summarize_dataset(records: list[dict]) -> dict:
         "total_examples": len(records),
         "required_keys": sorted(REQUIRED_KEYS),
     }
+
+
+def load_preferences_dataset(path: str | Path) -> Dataset:
+    records = load_jsonl(path)
+    errors = validate_dataset(records)
+
+    if errors:
+        raise ValueError(
+            "Dataset inválido:\n" + "\n".join(f"- {error}" for error in errors)
+        )
+
+    return Dataset.from_list(records)
