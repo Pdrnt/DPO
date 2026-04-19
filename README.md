@@ -205,7 +205,7 @@ O projeto foi organizado no estilo commit por commit, permitindo evolução prog
 
 Nota obrigatória sobre uso de IA
 
-Partes geradas/complementadas com IA, revisadas por Pedro Lima.
+**Partes geradas/complementadas com IA, revisadas por Pedro Lima, com auxílio no código, na estrutura do projeto e na escrita do README.**
 
 Referência da atividade
 
