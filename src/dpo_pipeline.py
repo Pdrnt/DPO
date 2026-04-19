@@ -1,5 +1,6 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
-from trl import DPOTrainer
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import DPOConfig, DPOTrainer
 
 from src.config import (
     BETA,
@@ -7,8 +8,6 @@ from src.config import (
     GRADIENT_ACCUMULATION_STEPS,
     LEARNING_RATE,
     LOGGING_STEPS,
-    MAX_LENGTH,
-    MAX_PROMPT_LENGTH,
     MODEL_NAME,
     NUM_TRAIN_EPOCHS,
     PER_DEVICE_TRAIN_BATCH_SIZE,
@@ -32,12 +31,17 @@ def load_tokenizer(model_name: str = MODEL_NAME):
 def load_models(model_name: str = MODEL_NAME):
     actor_model = AutoModelForCausalLM.from_pretrained(model_name)
     reference_model = AutoModelForCausalLM.from_pretrained(model_name)
-
     return actor_model, reference_model
 
 
 def load_dataset(dataset_path=DATASET_PATH):
     return load_preferences_dataset(dataset_path)
+
+
+def detect_optimizer() -> str:
+    if torch.cuda.is_available():
+        return "paged_adamw_32bit"
+    return "adamw_torch"
 
 
 def build_base_pipeline():
@@ -53,10 +57,11 @@ def build_base_pipeline():
     }
 
 
-def build_training_arguments(output_dir: str | None = None) -> TrainingArguments:
+def build_training_arguments(output_dir: str | None = None) -> DPOConfig:
     final_output_dir = str(output_dir or TRAIN_OUTPUT_DIR)
+    optimizer_name = detect_optimizer()
 
-    return TrainingArguments(
+    return DPOConfig(
         output_dir=final_output_dir,
         per_device_train_batch_size=PER_DEVICE_TRAIN_BATCH_SIZE,
         gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
@@ -70,11 +75,12 @@ def build_training_arguments(output_dir: str | None = None) -> TrainingArguments
         report_to="none",
         fp16=False,
         bf16=False,
-        optim="paged_adamw_32bit",
+        optim=optimizer_name,
+        beta=BETA,
     )
 
 
-def build_dpo_trainer(training_args: TrainingArguments | None = None):
+def build_dpo_trainer(training_args: DPOConfig | None = None):
     pipeline = build_base_pipeline()
 
     if training_args is None:
@@ -84,11 +90,8 @@ def build_dpo_trainer(training_args: TrainingArguments | None = None):
         model=pipeline["actor_model"],
         ref_model=pipeline["reference_model"],
         args=training_args,
-        beta=BETA,
         train_dataset=pipeline["dataset"],
-        tokenizer=pipeline["tokenizer"],
-        max_length=MAX_LENGTH,
-        max_prompt_length=MAX_PROMPT_LENGTH,
+        processing_class=pipeline["tokenizer"],
     )
 
     return trainer
