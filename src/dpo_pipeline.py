@@ -1,6 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import DPOTrainer
 
-from src.config import DATASET_PATH, MODEL_NAME
+from src.config import BETA, DATASET_PATH, MODEL_NAME
 from src.data_utils import load_preferences_dataset
 
 
@@ -35,3 +36,18 @@ def build_base_pipeline():
         "actor_model": actor_model,
         "reference_model": reference_model,
     }
+
+
+def build_dpo_trainer(training_args):
+    pipeline = build_base_pipeline()
+
+    trainer = DPOTrainer(
+        model=pipeline["actor_model"],
+        ref_model=pipeline["reference_model"],
+        args=training_args,
+        beta=BETA,
+        train_dataset=pipeline["dataset"],
+        tokenizer=pipeline["tokenizer"],
+    )
+
+    return trainer
