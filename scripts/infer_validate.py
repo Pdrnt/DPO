@@ -10,6 +10,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.config import (
     MODEL_NAME,
+    OUTPUTS_DIR,
     TRAIN_OUTPUT_DIR,
     VALIDATION_CHOSEN,
     VALIDATION_PROMPT,
@@ -61,13 +62,46 @@ def pretty_score(logprob: float) -> str:
     return f"{logprob:.4f}"
 
 
+def build_report(
+    model_path: str,
+    chosen_logprob: float,
+    rejected_logprob: float,
+    chosen_prob_proxy: float,
+    rejected_prob_proxy: float,
+) -> str:
+    if chosen_logprob > rejected_logprob:
+        result_line = "Resultado: a resposta segura foi priorizada sobre a rejeitada."
+    else:
+        result_line = "Resultado: a resposta rejeitada ainda não foi totalmente suprimida."
+
+    report = f"""Relatório de validação DPO
+
+Modelo carregado de: {model_path}
+Prompt de validação: {VALIDATION_PROMPT}
+
+Comparação das respostas candidatas:
+- chosen   logprob: {pretty_score(chosen_logprob)}
+- rejected logprob: {pretty_score(rejected_logprob)}
+- chosen   proxy score: {chosen_prob_proxy:.6f}
+- rejected proxy score: {rejected_prob_proxy:.6f}
+
+{result_line}
+
+Resposta segura esperada:
+{VALIDATION_CHOSEN}
+
+Resposta rejeitada comparada:
+{VALIDATION_REJECTED}
+"""
+    return report
+
+
 def main() -> None:
     print("==> Iniciando validação por inferência...\n")
 
-    model, tokenizer, model_path = load_model_and_tokenizer()
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Modelo carregado de: {model_path}")
-    print(f"Prompt de validação: {VALIDATION_PROMPT}\n")
+    model, tokenizer, model_path = load_model_and_tokenizer()
 
     chosen_logprob = compute_sequence_logprob(
         model, tokenizer, VALIDATION_PROMPT, VALIDATION_CHOSEN
@@ -79,22 +113,20 @@ def main() -> None:
     chosen_prob_proxy = math.exp(chosen_logprob / 100)
     rejected_prob_proxy = math.exp(rejected_logprob / 100)
 
-    print("Comparação das respostas candidatas:")
-    print(f"- chosen   logprob: {pretty_score(chosen_logprob)}")
-    print(f"- rejected logprob: {pretty_score(rejected_logprob)}")
-    print(f"- chosen   proxy score: {chosen_prob_proxy:.6f}")
-    print(f"- rejected proxy score: {rejected_prob_proxy:.6f}\n")
+    report = build_report(
+        model_path=model_path,
+        chosen_logprob=chosen_logprob,
+        rejected_logprob=rejected_logprob,
+        chosen_prob_proxy=chosen_prob_proxy,
+        rejected_prob_proxy=rejected_prob_proxy,
+    )
 
-    if chosen_logprob > rejected_logprob:
-        print("Resultado: a resposta segura foi priorizada sobre a rejeitada.")
-    else:
-        print("Resultado: a resposta rejeitada ainda não foi totalmente suprimida.")
+    print(report)
 
-    print("\nResposta segura esperada:")
-    print(VALIDATION_CHOSEN)
+    report_path = OUTPUTS_DIR / "validation_report.txt"
+    report_path.write_text(report, encoding="utf-8")
 
-    print("\nResposta rejeitada comparada:")
-    print(VALIDATION_REJECTED)
+    print(f"Relatório salvo em: {report_path}")
 
 
 if __name__ == "__main__":
